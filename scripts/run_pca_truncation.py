@@ -10,30 +10,41 @@ from truncate import (
 
 
 def run_dense_example():
-    """Contriever / MedCPT corpus-only PCA example."""
-    corpus = np.random.default_rng(0).normal(size=(200, 768))
-    queries = np.random.default_rng(1).normal(size=(10, 768))
+    """Contriever / MedCPT corpus-only PCA."""
+    rng = np.random.default_rng(0)
 
-    projector = fit_corpus_pca(corpus, n_components=128)
+    corpus = rng.normal(size=(200, 768))
+    queries = rng.normal(size=(10, 768))
 
-    # Queries are transformed using the frozen corpus PCA.
-    reduced_queries = apply_frozen_pca(projector, queries)
+    projector = fit_corpus_pca(
+        corpus,
+        n_components=128,
+    )
+
+    reduced_queries = apply_frozen_pca(
+        projector,
+        queries,
+    )
 
     return reduced_queries
 
 
 def run_colbert_example():
-    """ColBERT per-token PCA truncation example."""
+    """ColBERT per-token PCA truncation."""
     rng = np.random.default_rng(0)
 
-    # 20 documents, 32 tokens, original dimension 128.
-    corpus_tokens = rng.normal(size=(20, 32, 128))
+    # [num_docs, num_tokens, 128]
+    corpus_tokens = rng.normal(
+        size=(20, 32, 128)
+    )
 
+    # PCA is fitted on the complete corpus token pool.
     projector = fit_colbert_token_pca(
         corpus_tokens,
         n_components=32,
     )
 
+    # Tokens are projected and reshaped back.
     reduced_tokens = truncate_colbert_tokens(
         corpus_tokens,
         projector,
@@ -43,7 +54,8 @@ def run_colbert_example():
 
 
 def run_splade_example():
-    """SPLADE top-k sparse-term pruning example."""
+    """SPLADE top-k sparse-term pruning."""
+
     weights = {
         10: 0.2,
         25: 1.7,
@@ -52,14 +64,29 @@ def run_splade_example():
         55: 0.4,
     }
 
-    return topk_splade(weights, k=3)
+    # Keep only the 3 highest-weight terms.
+    truncated = topk_splade(
+        weights,
+        k=3,
+    )
+
+    return truncated
 
 
 if __name__ == "__main__":
+
     dense = run_dense_example()
     colbert = run_colbert_example()
     splade = run_splade_example()
 
-    print("Dense query shape:", dense.shape)
-    print("ColBERT token shape:", colbert.shape)
-    print("SPLADE top-k:", splade)
+    print("Dense / Contriever / MedCPT:")
+    print("  Original dimension: 768")
+    print("  Truncated dimension:", dense.shape)
+
+    print("\nColBERT:")
+    print("  Original shape: (20, 32, 128)")
+    print("  Truncated shape:", colbert.shape)
+
+    print("\nSPLADE:")
+    print("  Top-k terms:", splade)
+    print("  Number of retained terms:", len(splade))
