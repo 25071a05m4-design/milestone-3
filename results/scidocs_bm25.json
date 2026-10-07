@@ -1,0 +1,8 @@
+{
+  "dataset": "SciDocs",
+  "method": "BM25",
+  "budget": "1.0",
+  "metric": "NDCG@10",
+  "score": 0.14960065379596102,
+  "verified_with": "pytrec_eval"
+}

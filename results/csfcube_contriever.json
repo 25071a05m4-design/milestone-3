@@ -1,0 +1,69 @@
+{
+  "dataset": "CSFCube",
+  "method": "Contriever",
+  "metric": "NDCG@10",
+  "dimensions": [
+    768,
+    384,
+    192,
+    96,
+    48
+  ],
+  "results": {
+    "768": {
+      "background": 0.28756578857960974,
+      "method": 0.13565641414498109,
+      "result": 0.17050589832201454,
+      "mean_ndcg_at_10": 0.1979093670155351,
+      "queries": {
+        "background": 16,
+        "method": 17,
+        "result": 17
+      }
+    },
+    "384": {
+      "background": 0.29704743499482406,
+      "method": 0.13921506354468235,
+      "result": 0.19573640127504913,
+      "mean_ndcg_at_10": 0.21066629993818517,
+      "queries": {
+        "background": 16,
+        "method": 17,
+        "result": 17
+      }
+    },
+    "192": {
+      "background": 0.29709784388353305,
+      "method": 0.13929948478568188,
+      "result": 0.19559784376221767,
+      "mean_ndcg_at_10": 0.21066505747714417,
+      "queries": {
+        "background": 16,
+        "method": 17,
+        "result": 17
+      }
+    },
+    "96": {
+      "background": 0.29698313212819544,
+      "method": 0.13929948478568188,
+      "result": 0.1954711253570934,
+      "mean_ndcg_at_10": 0.21058458075699024,
+      "queries": {
+        "background": 16,
+        "method": 17,
+        "result": 17
+      }
+    },
+    "48": {
+      "background": 0.29704743499482406,
+      "method": 0.13950754606801855,
+      "result": 0.1959807057211191,
+      "mean_ndcg_at_10": 0.21084522892798727,
+      "queries": {
+        "background": 16,
+        "method": 17,
+        "result": 17
+      }
+    }
+  }
+}

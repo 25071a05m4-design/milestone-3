@@ -1,0 +1,13 @@
+{
+  "dataset": "CSFCube",
+  "method": "BM25",
+  "budget": "1.0",
+  "metric": "NDCG@10",
+  "facet_scores": {
+    "background": 0.5879987967239446,
+    "method": 0.43113663544923914,
+    "result": 0.49673052285185204
+  },
+  "score": 0.5052886516750119,
+  "verified_with": "project_csfcube_protocol"
+}

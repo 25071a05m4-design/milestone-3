@@ -1,0 +1,7 @@
+*.npz
+*.npy
+*.pt
+*.bin
+*.safetensors
+data/
+__pycache__/

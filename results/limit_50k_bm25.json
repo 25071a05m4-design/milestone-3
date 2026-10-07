@@ -1,0 +1,8 @@
+{
+  "dataset": "LIMIT-50k",
+  "method": "BM25",
+  "budget": "1.0",
+  "metric": "NDCG@10",
+  "score": 0.9394232065616929,
+  "verified_with": "pytrec_eval"
+}

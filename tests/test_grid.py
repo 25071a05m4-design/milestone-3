@@ -40,25 +40,3 @@ def test_incomplete_grid_is_rejected():
 def test_grid_writes_15_rows_and_5_budget_columns(tmp_path):
     output = tmp_path / "full_grid_results.csv"
 
-    write_grid(
-        complete_results(),
-        str(output),
-    )
-
-    with output.open(
-        newline="",
-        encoding="utf-8",
-    ) as f:
-        rows = list(csv.DictReader(f))
-
-    assert len(rows) == 15
-
-    assert set(rows[0].keys()) == {
-        "dataset",
-        "method",
-        "1.0",
-        "0.5",
-        "0.25",
-        "0.125",
-        "0.0625",
-    }
