@@ -2,9 +2,17 @@
 
 This milestone combines reproducible evaluation code and a fail-closed result-grid builder. It does **not** fabricate scores, treat missing values as zero, or claim experiments have run when their artifacts are absent.
 
-## 1. Run the existing full-budget BM25 baselines
+## 1. Run the existing full-budget BM25 and Contriever baselines
 
-From the repository root, in the configured Python environment:
+On Windows, after activating the environment that contains the project dependencies, run the orchestrator from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_milestone4_available.ps1
+```
+
+It verifies local data files, runs BM25 on all three datasets, reruns Contriever PCA retrieval/evaluation on LIMIT-50k and SciDocs, reruns the corrected CSFCube evaluator, and then attempts to build the grid with BM25 as an explicitly constant lexical control. It will stop on an experiment error and list missing score cells rather than fabricating results. It does not yet run full-dataset ColBERT, SPLADE, or MedCPT experiments.
+
+To run only a single BM25 dataset manually, use the commands below from the repository root, in the configured Python environment:
 
 ```bash
 python scripts/run_bm25.py --dataset CSFCube
@@ -22,9 +30,10 @@ The retrieval script creates 768-, 384-, 192-, 96-, and 48-dimensional ranking a
 python scripts/run_contriever_beir.py
 python scripts/evaluate_contriever_beir.py --dataset LIMIT-50k
 python scripts/evaluate_contriever_beir.py --dataset SciDocs
+python scripts/evaluate_contriever.py --data-dir "E:\\ir_project\\data\\CSFCube" --ranking-dir "E:\\ir_project\\data\\CSFCube\\contriever_rankings" --output "results\\csfcube_contriever.json"
 ```
 
-The evaluator validates test query coverage and writes `results/limit_50k_contriever.json` and `results/scidocs_contriever.json` in a schema the grid builder can ingest. It does not rerun embedding generation.
+The BEIR evaluator validates test query coverage and writes `results/limit_50k_contriever.json` and `results/scidocs_contriever.json` in a schema the grid builder can ingest. The CSFCube evaluator separately validates all three annotated facets, computes true NDCG@10 against the complete facet annotation labels, and writes `results/csfcube_contriever.json`. It uses an explicitly documented unweighted macro-average of the background, method, and result facet means. The evaluators do not rerun embedding generation.
 
 **Audit note:** the current checked-in LIMIT-50k and SciDocs Contriever NDCG@10 scores are extremely low. Re-run the ranking/evaluation pipeline and inspect query IDs, corpus IDs, embedding checkpoint/configuration, and top-10 rankings before interpreting those scores.
 
@@ -33,6 +42,14 @@ The evaluator validates test query coverage and writes `results/limit_50k_contri
 ```bash
 python scripts/build_full_grid.py --results-dir results --output results/full_grid_results.csv
 ```
+
+For an explicit **constant BM25 control** across all budget columns (BM25 itself is not truncated), use:
+
+```bash
+python scripts/build_full_grid.py --results-dir results --output results/full_grid_results.csv --bm25-control-all-budgets
+```
+
+This repeats each dataset's observed BM25 full-budget score as a reference control. It does not claim BM25 has been truncated or that its smaller-budget scores were measured. This mode requires all three full-budget BM25 files and must be described as a constant lexical control in any report.
 
 The loader supports:
 - `score` with optional `budget` (single-budget result, e.g. BM25)
@@ -53,6 +70,7 @@ The GitHub Actions workflow `.github/workflows/milestone4-validation.yml` runs t
 
 ## 5. Methodology decisions required before final reporting
 
+- Re-run the CSFCube Contriever evaluator before using its existing checked-in scores: the prior evaluator reported full-ranking NDCG under an ambiguous `ndcg` field and did not calculate NDCG@10 correctly. The updated evaluator uses top-10 DCG and the full annotation relevance set for ideal DCG.
 - Confirm that each result uses the intended NDCG@10 relevance convention and query set. CSFCube has its own candidate-pool/facet protocol; do not silently mix it with generic BEIR evaluation.
 - PCA dimensions map to dense representation fractions as 768→1.0, 384→0.5, 192→0.25, 96→0.125, 48→0.0625. Verify that this matches the final paper's budget definition.
 - ColBERT is token-level late interaction; do not mean-pool token vectors to disguise it as a single-vector retriever.

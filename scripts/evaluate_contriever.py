@@ -1,229 +1,152 @@
+"""Evaluate CSFCube Contriever/PCA rankings with correctly truncated NDCG@10.
+
+The CSFCube annotations define three facets (background, method, result).
+Each facet is evaluated independently on its annotated query set, then the
+reported aggregate is the unweighted macro-average of the three facet means.
+"""
+from __future__ import annotations
+
+import argparse
 import json
-import os
-import numpy as np
-
-
-ROOT = "CSFCube"
-RANKING_DIR = os.path.join(ROOT, "contriever_rankings")
+import math
+from pathlib import Path
+from typing import Mapping, Sequence
 
 FACETS = {
     "background": "test-pid2anns-csfcube-background.json",
     "method": "test-pid2anns-csfcube-method.json",
     "result": "test-pid2anns-csfcube-result.json",
 }
-
-DIMS = [768, 384, 192, 96, 48]
-
-
-def dcg(relevances):
-    total = 0.0
-
-    for rank, rel in enumerate(relevances, start=1):
-        total += (2 ** rel - 1) / np.log2(rank + 1)
-
-    return total
+DIMS = (768, 384, 192, 96, 48)
+DIMENSION_TO_BUDGET = {
+    768: "1.0",
+    384: "0.5",
+    192: "0.25",
+    96: "0.125",
+    48: "0.0625",
+}
 
 
-def ndcg(relevances):
-    if not relevances:
-        return 0.0
-
-    actual = dcg(relevances)
-    ideal = dcg(sorted(relevances, reverse=True))
-
-    if ideal == 0:
-        return 0.0
-
-    return actual / ideal
-
-
-def average_precision(binary_rels):
-    hits = 0
-    total = 0.0
-
-    for rank, rel in enumerate(binary_rels, start=1):
-        if rel:
-            hits += 1
-            total += hits / rank
-
-    if hits == 0:
-        return 0.0
-
-    return total / hits
-
-
-def evaluate_query(ranking, annotation):
-
-    candidate_ids = [
-        str(x)
-        for x in annotation["cands"]
-    ]
-
-    relevance_values = annotation["relevance_max"]
-
-    relevance = {
-        str(pid): int(rel)
-        for pid, rel in zip(
-            candidate_ids,
-            relevance_values
-        )
-    }
-
-    rels = [
-        relevance.get(str(pid), 0)
-        for pid in ranking
-    ]
-
-    binary = [
-        1 if x >= 2 else 0
-        for x in rels
-    ]
-
-    top20 = rels[:20]
-    binary20 = binary[:20]
-
-    # NDCG over the returned ranking
-    n = ndcg(rels)
-
-    # NDCG@20
-    n20 = ndcg(top20)
-
-    # P@20
-    p20 = sum(binary20) / 20.0
-
-    # Recall@20
-    total_relevant = sum(binary)
-
-    if total_relevant > 0:
-        recall20 = sum(binary20) / total_relevant
-    else:
-        recall20 = 0.0
-
-    # R-Precision
-    r = total_relevant
-
-    if r > 0:
-        r_binary = binary[:r]
-        rprec = sum(r_binary) / r
-    else:
-        rprec = 0.0
-
-    return {
-        "ndcg": n,
-        "ndcg20": n20,
-        "p20": p20,
-        "recall20": recall20,
-        "rprec": rprec,
-    }
-
-
-def load_annotations(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def main():
-
-    print("=" * 70)
-    print("CONTRIEVER + PCA CSFCUBE EVALUATION")
-    print("=" * 70)
-
-    all_results = []
-
-    for facet, filename in FACETS.items():
-
-        annotation_path = os.path.join(
-            ROOT,
-            filename
-        )
-
-        annotations = load_annotations(
-            annotation_path
-        )
-
-        print(
-            f"\nFacet: {facet}"
-        )
-
-        print(
-            "Queries:",
-            len(annotations)
-        )
-
-        for dim in DIMS:
-
-            ranking_path = os.path.join(
-                RANKING_DIR,
-                f"contriever-{dim}.json"
-            )
-
-            with open(
-                ranking_path,
-                "r",
-                encoding="utf-8"
-            ) as f:
-                rankings = json.load(f)
-
-            scores = []
-
-            for query_id, annotation in annotations.items():
-
-                query_id = str(query_id)
-
-                if query_id not in rankings:
-                    print(
-                        "WARNING: missing query",
-                        query_id
-                    )
-                    continue
-
-                result = evaluate_query(
-                    rankings[query_id],
-                    annotation
-                )
-
-                scores.append(result)
-
-            avg = {
-                key: np.mean([
-                    x[key]
-                    for x in scores
-                ])
-                for key in scores[0]
-            }
-
-            print(
-                f"{dim:>4} | "
-                f"NDCG {avg['ndcg']:.4f} | "
-                f"NDCG@20 {avg['ndcg20']:.4f} | "
-                f"P@20 {avg['p20']:.4f} | "
-                f"Recall@20 {avg['recall20']:.4f} | "
-                f"R-Prec {avg['rprec']:.4f}"
-            )
-
-            all_results.append({
-                "facet": facet,
-                "dimension": dim,
-                **avg,
-            })
-
-    output = os.path.join(
-        ROOT,
-        "contriever_results.json"
+def dcg_at_k(relevances: Sequence[float], k: int) -> float:
+    return sum(
+        (2.0 ** float(rel) - 1.0) / math.log2(rank + 1)
+        for rank, rel in enumerate(relevances[:k], start=1)
     )
 
-    with open(
-        output,
-        "w",
-        encoding="utf-8"
-    ) as f:
-        json.dump(
-            all_results,
-            f,
-            indent=2
+
+def ndcg_at_k(
+    ranked_ids: Sequence[str],
+    relevance: Mapping[str, float],
+    k: int,
+) -> float:
+    actual = [float(relevance.get(str(doc_id), 0.0)) for doc_id in ranked_ids[:k]]
+    ideal = sorted((float(value) for value in relevance.values()), reverse=True)[:k]
+    ideal_dcg = dcg_at_k(ideal, k)
+    return 0.0 if ideal_dcg <= 0.0 else dcg_at_k(actual, k) / ideal_dcg
+
+
+def evaluate_query(ranking: Sequence[str], annotation: Mapping[str, object]) -> dict[str, float]:
+    candidate_ids = [str(value) for value in annotation["cands"]]
+    relevance_values = annotation["relevance_max"]
+    if len(candidate_ids) != len(relevance_values):
+        raise ValueError("CSFCube annotation cands/relevance_max lengths differ")
+    relevance = {
+        doc_id: float(value)
+        for doc_id, value in zip(candidate_ids, relevance_values)
+    }
+    ranked_ids = [str(value) for value in ranking]
+    ranked_rels = [relevance.get(doc_id, 0.0) for doc_id in ranked_ids]
+    binary = [1 if rel >= 2 else 0 for rel in ranked_rels]
+    top20_binary = binary[:20]
+    total_relevant = sum(binary)
+    r = total_relevant
+    r_precision = (sum(binary[:r]) / r) if r else 0.0
+    return {
+        "ndcg_at_10": ndcg_at_k(ranked_ids, relevance, 10),
+        "ndcg_at_20": ndcg_at_k(ranked_ids, relevance, 20),
+        "p_at_20": sum(top20_binary) / 20.0,
+        "recall_at_20": (sum(top20_binary) / total_relevant) if total_relevant else 0.0,
+        "r_precision": r_precision,
+    }
+
+
+def load_json(path: Path):
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-dir", default="CSFCube", help="Directory containing CSFCube facet annotation JSONs")
+    parser.add_argument("--ranking-dir", help="Directory containing contriever-768.json, ...")
+    parser.add_argument("--output", default="results/csfcube_contriever.json", help="Output result JSON path")
+    args = parser.parse_args()
+
+    data_dir = Path(args.data_dir)
+    ranking_dir = Path(args.ranking_dir) if args.ranking_dir else data_dir / "contriever_rankings"
+    output_path = Path(args.output)
+    annotations_by_facet = {
+        facet: load_json(data_dir / filename)
+        for facet, filename in FACETS.items()
+    }
+    output = {
+        "dataset": "CSFCube",
+        "method": "Contriever",
+        "metric": "NDCG@10",
+        "evaluation_protocol": "CSFCube three-facet candidate annotations",
+        "aggregate": "unweighted macro-average of facet NDCG@10 means",
+        "dimensions": list(DIMS),
+        "results": {},
+    }
+
+    for dimension in DIMS:
+        ranking_path = ranking_dir / f"contriever-{dimension}.json"
+        rankings = load_json(ranking_path)
+        if not isinstance(rankings, dict):
+            raise ValueError(f"{ranking_path}: expected query-ID to ranked-document-ID mapping")
+        rankings = {str(qid): [str(docid) for docid in docs] for qid, docs in rankings.items()}
+
+        facet_means = {}
+        facet_query_counts = {}
+        facet_metrics = {}
+        for facet, annotations in annotations_by_facet.items():
+            expected = {str(qid) for qid in annotations}
+            missing = sorted(expected - set(rankings))
+            if missing:
+                raise ValueError(
+                    f"{ranking_path}: missing {len(missing)} {facet} queries; examples: {missing[:10]}"
+                )
+            per_query = [
+                evaluate_query(rankings[str(qid)], annotation)
+                for qid, annotation in annotations.items()
+            ]
+            if not per_query:
+                raise ValueError(f"CSFCube {facet} facet has no annotated queries")
+            facet_metrics[facet] = {
+                key: sum(item[key] for item in per_query) / len(per_query)
+                for key in per_query[0]
+            }
+            facet_means[facet] = facet_metrics[facet]["ndcg_at_10"]
+            facet_query_counts[facet] = len(per_query)
+
+        macro_ndcg10 = sum(facet_means.values()) / len(facet_means)
+        output["results"][str(dimension)] = {
+            **{facet: facet_means[facet] for facet in FACETS},
+            "mean_ndcg_at_10": macro_ndcg10,
+            "facet_metrics": facet_metrics,
+            "queries": facet_query_counts,
+        }
+        print(
+            f"CSFCube Contriever {dimension}d "
+            f"(budget {DIMENSION_TO_BUDGET[dimension]}): "
+            f"NDCG@10={macro_ndcg10:.6f}"
         )
 
-    print("\nSaved:", output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
+        json.dump(output, handle, indent=2)
+        handle.write("\n")
+    print(f"Saved validated result: {output_path}")
 
 
 if __name__ == "__main__":

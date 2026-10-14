@@ -8,6 +8,7 @@ from scripts.build_full_grid import (
     DATASETS,
     METHODS,
     ingest_result_object,
+    expand_bm25_control,
     load_result_directory,
     missing_cells,
     validate_results,
@@ -159,3 +160,28 @@ def test_load_result_directory_reads_json(tmp_path):
     results = load_result_directory(tmp_path)
     assert results[("SciDocs", "BM25", "1.0")] == pytest.approx(0.15)
     assert len(missing_cells(results)) == 74
+
+
+
+def test_bm25_control_expansion_repeats_only_observed_full_budget_scores():
+    results = {
+        ("CSFCube", "BM25", "1.0"): 0.5,
+        ("LIMIT-50k", "BM25", "1.0"): 0.9,
+        ("SciDocs", "BM25", "1.0"): 0.15,
+    }
+    expanded = expand_bm25_control(results)
+    for dataset, score in [
+        ("CSFCube", 0.5),
+        ("LIMIT-50k", 0.9),
+        ("SciDocs", 0.15),
+    ]:
+        for budget in BUDGETS:
+            assert expanded[(dataset, "BM25", budget)] == pytest.approx(score)
+
+
+def test_bm25_control_expansion_requires_all_dataset_baselines():
+    with pytest.raises(ValueError, match="missing SciDocs"):
+        expand_bm25_control({
+            ("CSFCube", "BM25", "1.0"): 0.5,
+            ("LIMIT-50k", "BM25", "1.0"): 0.9,
+        })

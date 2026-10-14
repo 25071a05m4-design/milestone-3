@@ -126,6 +126,27 @@ def load_result_directory(results_dir: str | os.PathLike[str]) -> dict[tuple[str
     return results
 
 
+def expand_bm25_control(
+    results: dict[tuple[str, str, str], float],
+) -> dict[tuple[str, str, str], float]:
+    """Repeat observed full-budget BM25 scores as explicit constant controls.
+
+    BM25 is not truncated. The repeated values are a reference/control row,
+    not budget-matched representations. Every dataset must have an observed
+    full-budget BM25 score; no value is synthesized from another dataset.
+    """
+    expanded = dict(results)
+    for dataset in DATASETS:
+        key = (dataset, "BM25", "1.0")
+        if key not in expanded:
+            raise ValueError(
+                f"Cannot expand BM25 control: missing {dataset} / BM25 / 1.0"
+            )
+        for budget in BUDGETS:
+            expanded.setdefault((dataset, "BM25", budget), expanded[key])
+    return expanded
+
+
 def missing_cells(results: Mapping[tuple[str, str, str], float]) -> list[tuple[str, str, str]]:
     return [
         (dataset, method, budget)
@@ -170,9 +191,28 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", default="results", help="Directory containing result JSON files")
     parser.add_argument("--output", default=OUTPUT, help="Output CSV path")
+    parser.add_argument(
+        "--bm25-control-all-budgets",
+        action="store_true",
+        help=(
+            "Repeat each dataset's observed BM25 budget-1.0 score across all "
+            "budget columns as an explicitly untruncated lexical control. "
+            "This is not a claim that BM25 was truncated."
+        ),
+    )
     args = parser.parse_args()
 
     results = load_result_directory(args.results_dir)
+    if args.bm25_control_all_budgets:
+        try:
+            results = expand_bm25_control(results)
+        except ValueError as exc:
+            print(exc)
+            return 2
+        print(
+            "BM25 control mode: repeated full-budget BM25 scores are labelled "
+            "as constant lexical controls, not truncated representations."
+        )
     print(f"Loaded {len(results)}/75 unique score cells from {args.results_dir}")
     missing = missing_cells(results)
     if missing:
