@@ -34,6 +34,14 @@ The evaluator validates test query coverage and writes `results/limit_50k_contri
 python scripts/build_full_grid.py --results-dir results --output results/full_grid_results.csv
 ```
 
+For an explicit **constant BM25 control** across all budget columns (BM25 itself is not truncated), use:
+
+```bash
+python scripts/build_full_grid.py --results-dir results --output results/full_grid_results.csv --bm25-control-all-budgets
+```
+
+This repeats each dataset's observed BM25 full-budget score as a reference control. It does not claim BM25 has been truncated or that its smaller-budget scores were measured. This mode requires all three full-budget BM25 files and must be described as a constant lexical control in any report.
+
 The loader supports:
 - `score` with optional `budget` (single-budget result, e.g. BM25)
 - `scores` keyed by budget
