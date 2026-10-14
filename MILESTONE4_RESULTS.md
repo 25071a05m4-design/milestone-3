@@ -2,9 +2,17 @@
 
 This milestone combines reproducible evaluation code and a fail-closed result-grid builder. It does **not** fabricate scores, treat missing values as zero, or claim experiments have run when their artifacts are absent.
 
-## 1. Run the existing full-budget BM25 baselines
+## 1. Run the existing full-budget BM25 and Contriever baselines
 
-From the repository root, in the configured Python environment:
+On Windows, after activating the environment that contains the project dependencies, run the orchestrator from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_milestone4_available.ps1
+```
+
+It verifies local data files, runs BM25 on all three datasets, reruns Contriever PCA retrieval/evaluation on LIMIT-50k and SciDocs, reruns the corrected CSFCube evaluator, and then attempts to build the grid with BM25 as an explicitly constant lexical control. It will stop on an experiment error and list missing score cells rather than fabricating results. It does not yet run full-dataset ColBERT, SPLADE, or MedCPT experiments.
+
+To run only a single BM25 dataset manually, use the commands below from the repository root, in the configured Python environment:
 
 ```bash
 python scripts/run_bm25.py --dataset CSFCube
