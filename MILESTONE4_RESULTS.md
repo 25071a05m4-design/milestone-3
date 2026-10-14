@@ -22,7 +22,7 @@ The retrieval script creates 768-, 384-, 192-, 96-, and 48-dimensional ranking a
 python scripts/run_contriever_beir.py
 python scripts/evaluate_contriever_beir.py --dataset LIMIT-50k
 python scripts/evaluate_contriever_beir.py --dataset SciDocs
-python scripts/evaluate_contriever.py
+python scripts/evaluate_contriever.py --data-dir "E:\\ir_project\\data\\CSFCube" --ranking-dir "E:\\ir_project\\data\\CSFCube\\contriever_rankings" --output "results\\csfcube_contriever.json"
 ```
 
 The BEIR evaluator validates test query coverage and writes `results/limit_50k_contriever.json` and `results/scidocs_contriever.json` in a schema the grid builder can ingest. The CSFCube evaluator separately validates all three annotated facets, computes true NDCG@10 against the complete facet annotation labels, and writes `results/csfcube_contriever.json`. It uses an explicitly documented unweighted macro-average of the background, method, and result facet means. The evaluators do not rerun embedding generation.
