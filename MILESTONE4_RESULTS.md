@@ -22,9 +22,10 @@ The retrieval script creates 768-, 384-, 192-, 96-, and 48-dimensional ranking a
 python scripts/run_contriever_beir.py
 python scripts/evaluate_contriever_beir.py --dataset LIMIT-50k
 python scripts/evaluate_contriever_beir.py --dataset SciDocs
+python scripts/evaluate_contriever.py
 ```
 
-The evaluator validates test query coverage and writes `results/limit_50k_contriever.json` and `results/scidocs_contriever.json` in a schema the grid builder can ingest. It does not rerun embedding generation.
+The BEIR evaluator validates test query coverage and writes `results/limit_50k_contriever.json` and `results/scidocs_contriever.json` in a schema the grid builder can ingest. The CSFCube evaluator separately validates all three annotated facets, computes true NDCG@10 against the complete facet annotation labels, and writes `results/csfcube_contriever.json`. It uses an explicitly documented unweighted macro-average of the background, method, and result facet means. The evaluators do not rerun embedding generation.
 
 **Audit note:** the current checked-in LIMIT-50k and SciDocs Contriever NDCG@10 scores are extremely low. Re-run the ranking/evaluation pipeline and inspect query IDs, corpus IDs, embedding checkpoint/configuration, and top-10 rankings before interpreting those scores.
 
@@ -61,6 +62,7 @@ The GitHub Actions workflow `.github/workflows/milestone4-validation.yml` runs t
 
 ## 5. Methodology decisions required before final reporting
 
+- Re-run the CSFCube Contriever evaluator before using its existing checked-in scores: the prior evaluator reported full-ranking NDCG under an ambiguous `ndcg` field and did not calculate NDCG@10 correctly. The updated evaluator uses top-10 DCG and the full annotation relevance set for ideal DCG.
 - Confirm that each result uses the intended NDCG@10 relevance convention and query set. CSFCube has its own candidate-pool/facet protocol; do not silently mix it with generic BEIR evaluation.
 - PCA dimensions map to dense representation fractions as 768→1.0, 384→0.5, 192→0.25, 96→0.125, 48→0.0625. Verify that this matches the final paper's budget definition.
 - ColBERT is token-level late interaction; do not mean-pool token vectors to disguise it as a single-vector retriever.
