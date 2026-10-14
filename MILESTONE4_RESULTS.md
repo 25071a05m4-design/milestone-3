@@ -1,36 +1,62 @@
 # Milestone 4 — Result ingestion and grid validation
 
-This stage collects already-computed NDCG@10 results into the required 3-dataset × 5-method × 5-budget grid. It does **not** run retrievers, train neural models, or manufacture scores.
+This milestone combines reproducible evaluation code and a fail-closed result-grid builder. It does **not** fabricate scores, treat missing values as zero, or claim experiments have run when their artifacts are absent.
 
-## Build the grid
+## 1. Run the existing full-budget BM25 baselines
 
-From the repository root:
+From the repository root, in the configured Python environment:
+
+```bash
+python scripts/run_bm25.py --dataset CSFCube
+python scripts/run_bm25.py --dataset LIMIT-50k
+python scripts/run_bm25.py --dataset SciDocs
+```
+
+The current script writes full-budget JSON results under `results/`. Its configured dataset paths are local Windows paths; update them for your machine if needed.
+
+## 2. Run Contriever retrieval and evaluate the saved rankings
+
+The retrieval script creates 768-, 384-, 192-, 96-, and 48-dimensional ranking artifacts for LIMIT-50k and SciDocs. It uses the local Contriever model and local dataset paths configured near the top of `scripts/run_contriever_beir.py`.
+
+```bash
+python scripts/run_contriever_beir.py
+python scripts/evaluate_contriever_beir.py --dataset LIMIT-50k
+python scripts/evaluate_contriever_beir.py --dataset SciDocs
+```
+
+The evaluator validates test query coverage and writes `results/limit_50k_contriever.json` and `results/scidocs_contriever.json` in a schema the grid builder can ingest. It does not rerun embedding generation.
+
+**Audit note:** the current checked-in LIMIT-50k and SciDocs Contriever NDCG@10 scores are extremely low. Re-run the ranking/evaluation pipeline and inspect query IDs, corpus IDs, embedding checkpoint/configuration, and top-10 rankings before interpreting those scores.
+
+## 3. Build the 75-cell grid
 
 ```bash
 python scripts/build_full_grid.py --results-dir results --output results/full_grid_results.csv
 ```
 
-The loader supports the result JSON layouts currently present in this repository:
-- `score` with optional `budget` (single-budget results such as BM25)
+The loader supports:
+- `score` with optional `budget` (single-budget result, e.g. BM25)
 - `scores` keyed by budget
-- `budgets` keyed by budget with an `ndcg@10` field (MedCPT layout)
-- `results` keyed by dimensions 768, 384, 192, 96, and 48 (CSFCube Contriever layout)
+- `budgets` keyed by budget with an `ndcg@10` field (MedCPT)
+- `results` keyed by dimensions 768, 384, 192, 96, and 48 with `mean_ndcg_at_10` (Contriever dimension runs)
 
-The script checks score ranges, catches conflicting duplicate scores, reports missing cells, and exits without writing a purportedly complete grid if any cell is missing. Missing values must be filled only by running and validating the corresponding experiment.
+It checks score ranges, catches conflicting duplicate scores, reports missing cells, and exits without writing a purportedly complete grid if any cell is missing.
 
-## Tests
+## 4. Tests
 
 ```bash
+python -m pip install numpy pytest
 python -m pytest -v
 ```
 
-Tests cover the 75-cell requirement, CSV layout, the supported result schemas, duplicate conflicts, invalid scores, and missing results.
+The GitHub Actions workflow `.github/workflows/milestone4-validation.yml` runs the lightweight unit tests on pushes and pull requests.
 
-## Methodology checks before final reporting
+## 5. Methodology decisions required before final reporting
 
-- Confirm each result uses the same NDCG@10 relevance convention and query set as the dataset's intended evaluator. CSFCube has its own protocol; do not silently mix it with generic BEIR evaluation.
-- A PCA dimension is mapped to the fraction of the original 768-dimensional dense vector: 768→1.0, 384→0.5, 192→0.25, 96→0.125, 48→0.0625. Verify this budget mapping matches the final paper's representation-budget definition.
-- ColBERT is token-level late interaction; do not mean-pool its token vectors to pretend it is a single-vector retriever.
-- SPLADE is sparse vocabulary-space; its budget must be defined by the pruning protocol, not by dense-vector dimension.
-- BM25 is a lexical baseline, not a neural representation with epochs or a learned vector dimension. Decide and document whether it is a single full-budget reference or a constant control across budget columns. The builder intentionally does not copy its full-budget score into smaller-budget cells.
-- The current checked-in result files are partial. Do not report a completed 75-cell grid until every required cell is backed by a reproducible result artifact.
+- Confirm that each result uses the intended NDCG@10 relevance convention and query set. CSFCube has its own candidate-pool/facet protocol; do not silently mix it with generic BEIR evaluation.
+- PCA dimensions map to dense representation fractions as 768→1.0, 384→0.5, 192→0.25, 96→0.125, 48→0.0625. Verify that this matches the final paper's budget definition.
+- ColBERT is token-level late interaction; do not mean-pool token vectors to disguise it as a single-vector retriever.
+- SPLADE is sparse vocabulary-space; define its budget via a documented term-pruning protocol, not dense-vector dimension.
+- BM25 is a lexical baseline, not a neural representation with epochs or learned vector dimensions. Decide and document whether BM25 is only a full-budget reference or a constant control at each budget. The grid builder intentionally does not copy its score into smaller-budget cells.
+- The currently checked-in JSONs provide only a partial grid (approximately 28 of 75 cells). ColBERT/SPLADE and additional dataset/budget outputs still need to be generated, validated, and saved before a full grid can be reported.
+- Model runs rely on local datasets/checkpoints under `E:\\ir_project`; those experiments cannot be truthfully marked complete until they have run in the configured environment and the resulting artifacts are reviewed.
