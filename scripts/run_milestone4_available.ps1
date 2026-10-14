@@ -41,7 +41,12 @@ foreach ($dataset in @("CSFCube", "LIMIT-50k", "SciDocs")) {
 if ($LASTEXITCODE -ne 0) { throw "Contriever retrieval failed (exit $LASTEXITCODE)" }
 
 foreach ($dataset in @("LIMIT-50k", "SciDocs")) {
-    & $Python "scripts/evaluate_contriever_beir.py" --dataset $dataset --data-dir "$DataRoot\$($dataset.ToLower().Replace('-', '_'))" --ranking-dir "$DataRoot\contriever_beir" --output-dir "results"
+    if ($dataset -eq "LIMIT-50k") {
+        $DatasetDir = "$DataRoot\limit-50k"
+    } else {
+        $DatasetDir = "$DataRoot\scidocs"
+    }
+    & $Python "scripts/evaluate_contriever_beir.py" --dataset $dataset --data-dir $DatasetDir --ranking-dir "$DataRoot\contriever_beir" --output-dir "results"
     if ($LASTEXITCODE -ne 0) { throw "Contriever evaluation failed for $dataset (exit $LASTEXITCODE)" }
 }
 
