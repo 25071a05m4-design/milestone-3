@@ -6,14 +6,11 @@ reported aggregate is the unweighted macro-average of the three facet means.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import math
 from pathlib import Path
 from typing import Mapping, Sequence
-
-ROOT = Path("CSFCube")
-RANKING_DIR = ROOT / "contriever_rankings"
-OUTPUT_PATH = Path("results") / "csfcube_contriever.json"
 
 FACETS = {
     "background": "test-pid2anns-csfcube-background.json",
@@ -79,8 +76,17 @@ def load_json(path: Path):
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-dir", default="CSFCube", help="Directory containing CSFCube facet annotation JSONs")
+    parser.add_argument("--ranking-dir", help="Directory containing contriever-768.json, ...")
+    parser.add_argument("--output", default="results/csfcube_contriever.json", help="Output result JSON path")
+    args = parser.parse_args()
+
+    data_dir = Path(args.data_dir)
+    ranking_dir = Path(args.ranking_dir) if args.ranking_dir else data_dir / "contriever_rankings"
+    output_path = Path(args.output)
     annotations_by_facet = {
-        facet: load_json(ROOT / filename)
+        facet: load_json(data_dir / filename)
         for facet, filename in FACETS.items()
     }
     output = {
@@ -94,7 +100,7 @@ def main() -> None:
     }
 
     for dimension in DIMS:
-        ranking_path = RANKING_DIR / f"contriever-{dimension}.json"
+        ranking_path = ranking_dir / f"contriever-{dimension}.json"
         rankings = load_json(ranking_path)
         if not isinstance(rankings, dict):
             raise ValueError(f"{ranking_path}: expected query-ID to ranked-document-ID mapping")
@@ -136,11 +142,11 @@ def main() -> None:
             f"NDCG@10={macro_ndcg10:.6f}"
         )
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with OUTPUT_PATH.open("w", encoding="utf-8") as handle:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
         json.dump(output, handle, indent=2)
         handle.write("\n")
-    print(f"Saved validated result: {OUTPUT_PATH}")
+    print(f"Saved validated result: {output_path}")
 
 
 if __name__ == "__main__":
