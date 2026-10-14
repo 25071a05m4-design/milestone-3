@@ -126,6 +126,27 @@ def load_result_directory(results_dir: str | os.PathLike[str]) -> dict[tuple[str
     return results
 
 
+def expand_bm25_control(
+    results: dict[tuple[str, str, str], float],
+) -> dict[tuple[str, str, str], float]:
+    """Repeat observed full-budget BM25 scores as explicit constant controls.
+
+    BM25 is not truncated. The repeated values are a reference/control row,
+    not budget-matched representations. Every dataset must have an observed
+    full-budget BM25 score; no value is synthesized from another dataset.
+    """
+    expanded = dict(results)
+    for dataset in DATASETS:
+        key = (dataset, "BM25", "1.0")
+        if key not in expanded:
+            raise ValueError(
+                f"Cannot expand BM25 control: missing {dataset} / BM25 / 1.0"
+            )
+        for budget in BUDGETS:
+            expanded.setdefault((dataset, "BM25", budget), expanded[key])
+    return expanded
+
+
 def missing_cells(results: Mapping[tuple[str, str, str], float]) -> list[tuple[str, str, str]]:
     return [
         (dataset, method, budget)
@@ -183,13 +204,11 @@ def main() -> int:
 
     results = load_result_directory(args.results_dir)
     if args.bm25_control_all_budgets:
-        for dataset in DATASETS:
-            full_budget = (dataset, "BM25", "1.0")
-            if full_budget not in results:
-                print(f"Cannot expand BM25 control: missing {dataset} / BM25 / 1.0")
-                return 2
-            for budget in BUDGETS:
-                results.setdefault((dataset, "BM25", budget), results[full_budget])
+        try:
+            results = expand_bm25_control(results)
+        except ValueError as exc:
+            print(exc)
+            return 2
         print(
             "BM25 control mode: repeated full-budget BM25 scores are labelled "
             "as constant lexical controls, not truncated representations."
