@@ -16,7 +16,6 @@ import math
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from beir.datasets.data_loader import GenericDataLoader
 
 DIMENSIONS = (768, 384, 192, 96, 48)
 DIMENSION_TO_BUDGET = {
@@ -81,6 +80,12 @@ def evaluate_dataset(
     ranking_dir: str,
     output_dir: str,
 ) -> Path:
+    try:
+        from beir.datasets.data_loader import GenericDataLoader
+    except ImportError as exc:
+        raise RuntimeError(
+            "BEIR is required to load dataset qrels. Install the project dependencies first."
+        ) from exc
     _, queries, qrels = GenericDataLoader(data_folder=data_dir).load(split="test")
     expected_qids = {str(qid) for qid in queries}
     qrel_qids = {str(qid) for qid in qrels}
